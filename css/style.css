@@ -1,0 +1,303 @@
+/* ===== LOGIN PAGE ===== */
+.login-page {
+  background: #f4f6fb;
+  min-height: 100vh;
+  font-family: "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  font-family: "Segoe UI", sans-serif;
+}
+
+body.login-page {
+  margin: 0;
+  background: #f4f6fb;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* CENTER */
+.login-center {
+  width: 420px;
+  text-align: center;
+}
+
+/* LOGO */
+.login-logo {
+  width: 120px;
+  margin-bottom: 15px;
+}
+
+/* TITLE */
+.login-title {
+  color: #1f5fa8;
+  margin: 10px 0;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+/* SUBTITLE */
+.login-subtitle {
+  color: #1f5fa8;
+  margin-bottom: 30px;
+  font-size: 15px;
+}
+
+/* INPUTS */
+.login-center input {
+  width: 100%;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  border: 2px solid #1f5fa8;
+  border-radius: 10px;
+  font-size: 16px;
+  outline: none;
+}
+
+/* BUTTON */
+.login-center button {
+  width: 100%;
+  padding: 14px;
+  background: #1f5fa8;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.login-center button:hover {
+  background: #174b86;
+}
+
+/* LINK */
+.login-link {
+  display: block;
+  margin-top: 18px;
+  color: #1f5fa8;
+  text-decoration: underline;
+  font-size: 14px;
+}
+
+/* === LOGIN DESIGN (1-rasmga mos) === */
+
+.login-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: calc(100vh - 70px);
+  padding-top: 0;
+}
+
+.login-card {
+  width: 380px;
+  padding: 32px 30px;
+  border-radius: 12px;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+}
+
+.login-card h2 {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.login-card input {
+  background: #f1f4f9;
+  border: 1px solid #e1e5ee;
+}
+
+.login-card input:focus {
+  background: #fff;
+}
+
+.btn-primary {
+  margin-top: 6px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.link-muted {
+  margin-top: 12px;
+}
+
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    font-family:"Segoe UI", Arial, sans-serif;
+    background:#f4f4f4;
+}
+
+/* ===== HEADER ===== */
+.main-header{
+    background:#1f5fa8;
+    color:#fff;
+    height:80px;
+    padding:0 40px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    border-radius:0 0 14px 14px;
+}
+
+.header-left{
+    display:flex;
+    align-items:center;
+    gap:15px;
+    font-size:22px;
+    font-weight:600;
+}
+
+.logo-header{
+    height:48px;
+}
+
+.exit-btn{
+    color:#fff;
+    font-size:18px;
+    text-decoration:underline;
+}
+
+/* ===== CONTENT ===== */
+.dashboard-wrap{
+    margin-top:90px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:45px;
+}
+
+/* ===== BUTTONS ===== */
+.dashboard-btn{
+    width:540px;
+    padding:45px 20px;
+    background:#1f5fa8;
+    color:#fff;
+    border:none;
+    border-radius:16px;
+    font-size:28px;
+    font-weight:600;
+    cursor:pointer;
+    box-shadow:0 10px 20px rgba(0,0,0,0.18);
+    transition:0.25s ease;
+}
+
+.dashboard-btn:hover{
+    background:#174a84;
+    transform:translateY(-4px);
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background: #f5f7fa;
+  margin: 0;
+}
+
+.main-header {
+  background: #1e5fa8;
+  color: #fff;
+  padding: 15px 30px;
+}
+
+.page-title {
+  text-align: center;
+  margin: 20px 0;
+}
+
+.container {
+  max-width: 1100px;
+  margin: auto;
+}
+
+.employee-card {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  border: 3px solid #1e5fa8;
+  border-radius: 12px;
+  padding: 20px;
+  background: #fff;
+  margin-bottom: 10px;
+}
+
+.employee-left h3 {
+  margin: 0;
+  color: #1e5fa8;
+}
+
+.employee-right {
+  display: flex;
+  gap: 10px;
+}
+
+.emp-btn {
+  background: #1e5fa8;
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.add-btn {
+  position: absolute;
+  right: 20px;
+  bottom: -18px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #1e5fa8;
+  color: #fff;
+  font-size: 22px;
+  border: none;
+  cursor: pointer;
+}
+
+.task-box {
+  display: none;
+  border: 2px dashed #1e5fa8;
+  padding: 10px;
+  margin-bottom: 15px;
+  border-radius: 8px;
+  background: #f9fbff;
+}
+
+.add-employee-btn {
+  display: block;
+  margin: 30px auto;
+  background: #1e5fa8;
+  color: #fff;
+  border: none;
+  padding: 12px 25px;
+  border-radius: 10px;
+  font-size: 16px;
+}
+
+.modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-content {
+  background: #fff;
+  padding: 25px;
+  border-radius: 10px;
+  width: 320px;
+}
+
+.modal-content input {
+  width: 100%;
+  margin: 8px 0;
+  padding: 8px;
+}
+
