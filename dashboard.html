@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+  <title>Aloqa PRO | Dashboard</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="main-header">
+    <div class="header-left">
+      <img src="images/studentcall.png" class="logo-header" alt="Student Call">
+      <span>Aloqa PRO</span>
+    </div>
+    <a class="exit-btn" href="#" onclick="doLogout(); return false;">Chiqish</a>
+  </header>
+
+  <!-- CONTENT -->
+  <main class="dashboard-wrap">
+    <button class="dashboard-btn" onclick="location.href='staff.html'">
+      Hodimlar nazorati
+    </button>
+
+    <button class="dashboard-btn" onclick="location.href='universities.html'">
+      Universitetlar monitoringi
+    </button>
+
+    <button class="dashboard-btn" onclick="location.href='clinics.html'">
+  Klinikalar
+</button>
+
+<button class="dashboard-btn" onclick="location.href='schools.html'">
+  Xususiy maktablar
+</button>
+
+  </main>
+
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/auth.js"></script>
+  <script>requireAuth();</script>
+
+</body>
+</html>
+
+
+
+
+
+
+

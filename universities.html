@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+<title>Universitetlar monitoringi</title>
+
+<style>
+:root{
+    --blue:#1f5fa8;
+    --bg:#f4f7fb;
+    --border:#1f5fa8;
+}
+*{box-sizing:border-box;font-family:Arial,sans-serif}
+body{margin:0;background:var(--bg)}
+
+.header{
+    background:var(--blue);
+    color:#fff;
+    padding:15px 25px;
+    display:flex;
+    align-items:center;
+    gap:15px;
+}
+.logo{height:45px}
+.header h1{margin:0;font-size:22px}
+
+.container{padding:25px}
+
+.filter{
+    display:flex;
+    gap:10px;
+    margin-bottom:15px;
+}
+.filter input{padding:8px;width:250px}
+
+.btn{
+    background:var(--blue);
+    color:#fff;
+    border:none;
+    padding:8px 14px;
+    border-radius:6px;
+    cursor:pointer;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    background:#fff;
+}
+th,td{
+    border:2px solid var(--border);
+    padding:8px;
+    text-align:center;
+}
+th{color:var(--blue);background:#f9fbff}
+
+.univer{
+    font-weight:bold;
+    color:var(--blue);
+    text-align:left;
+}
+
+.status-box{
+    text-align:left;
+    font-size:13px;
+}
+
+.comment{
+    width:100%;
+    border:none;
+    outline:none;
+}
+
+.footer{
+    margin-top:15px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.modal{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.4);
+    display:none;
+    align-items:center;
+    justify-content:center;
+}
+.modal-box{
+    background:#fff;
+    padding:20px;
+    width:350px;
+    border-radius:10px;
+}
+.modal-box input{
+    width:100%;
+    padding:8px;
+    margin-bottom:10px;
+}
+.status-green select{ background:#e9f7ef; }
+.status-yellow select{ background:#fff7db; }
+.status-red select{ background:#fde7e7; }
+.status-wrap select{ width:100%; padding:6px; }
+</style>
+</head>
+
+<body>
+
+<div class="header">
+    <img src="images/studentcall.png" class="logo">
+    <h1>Universitetlar monitoringi</h1>
+</div>
+
+<div class="container">
+
+    <div class="filter">
+        <input id="filterInput" placeholder="Universitet nomi bo‘yicha filtr">
+        <button class="btn" onclick="filterTable()">Filtr</button>
+    </div>
+
+    <table>
+        <thead>
+        <tr>
+            <th>⛪️Univer nomi</th>
+            <th>📩Taklif</th>
+            <th>🤝Suhbat sanasi</th>
+            <th>💵Коммерческий предложение</th>
+            <th>📝Shartnoma</th>
+            <th>👨‍💻Ish boshlandi</th>
+            <th>🏁Yakun</th>
+            <th>💬Koment</th>
+            <th>🖋Tahrirlash</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div class="footer">
+        <button class="btn" onclick="history.back()">← Orqaga</button>
+        <div>
+            <button class="btn" onclick="openDelete()">Univerni o‘chirish −</button>
+            <button class="btn" onclick="openAdd()">Univer qo‘shish +</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="addModal">
+    <div class="modal-box">
+        <input id="addName" placeholder="Universitet nomi">
+        <input id="addWork" placeholder="Ish boshlandi">
+        <button class="btn" onclick="addUniver()">Qo‘shish</button>
+    </div>
+</div>
+
+<div class="modal" id="deleteModal">
+    <div class="modal-box">
+        <input id="deleteName" placeholder="Universitet nomi">
+        <button class="btn" onclick="deleteUniver()">O‘chirish</button>
+    </div>
+</div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/auth.js"></script>
+  <script>requireAuth();</script>
+
+
+<script>const tbody = document.querySelector("tbody");
+const db = window.supabaseClient;
+
+// Status variantlari (ko'paytirildi)
+const STATUS = {
+  offer: [
+    { v: "", t: "—", c: "" },
+    { v: "Yuboriladi", t: "Yuboriladi", c: "status-yellow" },
+    { v: "Yuborildi", t: "Yuborildi", c: "status-yellow" },
+    { v: "Ko‘rib chiqilmoqda", t: "Ko‘rib chiqilmoqda", c: "status-yellow" },
+    { v: "Qayta aloqa", t: "Qayta aloqa", c: "status-yellow" },
+    { v: "Rad etildi", t: "Rad etildi", c: "status-red" }
+  ],
+  commercial: [
+    { v: "", t: "—", c: "" },
+    { v: "Tayyorlanmoqda", t: "Tayyorlanmoqda", c: "status-yellow" },
+    { v: "Yuborildi", t: "Yuborildi", c: "status-yellow" },
+    { v: "Kelishildi", t: "Kelishildi", c: "status-green" },
+    { v: "Rad etildi", t: "Rad etildi", c: "status-red" }
+  ],
+  contract: [
+    { v: "", t: "—", c: "" },
+    { v: "Kutilmoqda", t: "Kutilmoqda", c: "status-yellow" },
+    { v: "Muzokara", t: "Muzokara", c: "status-yellow" },
+    { v: "Imzolandi", t: "Imzolandi", c: "status-green" },
+    { v: "Rad etildi", t: "Rad etildi", c: "status-red" }
+  ],
+  final: [
+    { v: "", t: "—", c: "" },
+    { v: "Jarayonda", t: "Jarayonda", c: "status-yellow" },
+    { v: "Yakunlandi", t: "Yakunlandi", c: "status-green" },
+    { v: "Bekor qilindi", t: "Bekor qilindi", c: "status-red" }
+  ]
+};
+
+/* =========================
+   API (Supabase)
+========================= */
+async function apiList(){
+  const { data, error } = await db
+    .from("universities")
+    .select("*")
+    .order("name", { ascending: true });
+  if(error) throw new Error(error.message || "Supabase list error");
+  return (data || []).map(x => ({
+    university: x.name,
+    work_started: x.work_started || "",
+    meeting_date: x.meeting_date || "",
+    comment: x.comment || "",
+    offer_status: x.offer_status || "",
+    commercial_status: x.commercial_status || "",
+    contract_status: x.contract_status || "",
+    final_status: x.final_status || "",
+  }));
+}
+
+async function apiUpsertOne(item){
+  const payload = {
+    name: item.university,
+    work_started: item.work_started || null,
+    meeting_date: item.meeting_date || null,
+    comment: item.comment || null,
+    offer_status: item.offer_status || null,
+    commercial_status: item.commercial_status || null,
+    contract_status: item.contract_status || null,
+    final_status: item.final_status || null,
+    updated_at: new Date().toISOString()
+  };
+
+  const { error } = await db
+    .from("universities")
+    .upsert(payload, { onConflict: "name" });
+  if(error) throw new Error(error.message || "Supabase upsert error");
+}
+
+async function apiDeleteByName(university){
+  const { error } = await db
+    .from("universities")
+    .delete()
+    .ilike("name", university);
+  if(error) throw new Error(error.message || "Supabase delete error");
+}
+
+function statusClass(groupKey, value){
+  const item = STATUS[groupKey].find(x => x.v === value);
+  return item ? item.c : "";
+}
+
+function statusSelectHTML(groupKey, value, univerName){
+  const opts = STATUS[groupKey].map(o =>
+    `<option value="${String(o.v).replace(/"/g,'&quot;')}">${o.t}</option>`
+  ).join("");
+
+  return `
+    <div class="status-wrap ${statusClass(groupKey, value)}">
+      <select class="status-select"
+              data-group="${groupKey}"
+              data-univer="${encodeURIComponent(univerName)}">
+        ${opts}
+      </select>
+    </div>
+  `;
+}
+
+function applyStatusColor(sel){
+  const wrap = sel.closest(".status-wrap");
+  if(!wrap) return;
+  wrap.classList.remove("status-green","status-red","status-yellow");
+  const cls = statusClass(sel.dataset.group, sel.value);
+  if(cls) wrap.classList.add(cls);
+}
+
+/* =========================
+   HELPERS
+========================= */
+function buildItemFromRow(tr){
+  const university = tr.querySelector(".univer")?.textContent.trim() || "";
+
+  const dateVal = tr.querySelector('input[type="date"]')?.value || "";
+  const commentVal = tr.querySelector(".comment")?.value || "";
+
+  const offerSel = tr.querySelector('select[data-group="offer"]');
+  const commSel  = tr.querySelector('select[data-group="commercial"]');
+  const contSel  = tr.querySelector('select[data-group="contract"]');
+  const finalSel = tr.querySelector('select[data-group="final"]');
+
+  return {
+    university,
+    work_started: tr.children[5]?.textContent.trim() || "",
+    meeting_date: dateVal,
+    comment: commentVal,
+    offer_status: offerSel?.value || "",
+    commercial_status: commSel?.value || "",
+    contract_status: contSel?.value || "",
+    final_status: finalSel?.value || "",
+  };
+}
+
+/* =========================
+   RENDER / LOAD
+========================= */
+async function loadFromLocal(){
+  let universities = [];
+  try{
+    universities = await apiList();
+  }catch(err){
+    console.log(err);
+    alert("Ma'lumotni yuklashda xatolik. Supabase RLS policy (Anyone) ekanini tekshiring!");
+    universities = [];
+  }
+
+  tbody.innerHTML = "";
+
+  universities.forEach(u=>{
+    u.offer_status = u.offer_status || "";
+    u.commercial_status = u.commercial_status || "";
+    u.contract_status = u.contract_status || "";
+    u.final_status = u.final_status || "";
+    u.meeting_date = u.meeting_date || "";
+    u.comment = u.comment || "";
+    u.work_started = u.work_started || "";
+    u.university = u.university || u.name || "";
+
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td class="univer">${u.university}</td>
+
+      <td class="status-box">
+        ${statusSelectHTML("offer", u.offer_status, u.university)}
+      </td>
+
+      <td><input type="date" value="${u.meeting_date}" disabled></td>
+
+      <td class="status-box">
+        ${statusSelectHTML("commercial", u.commercial_status, u.university)}
+      </td>
+
+      <td class="status-box">
+        ${statusSelectHTML("contract", u.contract_status, u.university)}
+      </td>
+
+      <td>${u.work_started}</td>
+
+      <td class="status-box">
+        ${statusSelectHTML("final", u.final_status, u.university)}
+      </td>
+
+      <td><input class="comment" value="${u.comment}" placeholder="Koment..." disabled></td>
+
+      <td>
+        <button class="btn" data-edit="0" onclick="toggleEdit(this)">✏️ Tahrirlash</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+
+    // select qiymatlarini set qilish + disable
+    tr.querySelectorAll("select.status-select").forEach(sel=>{
+      const g = sel.dataset.group;
+      const val =
+        g === "offer" ? u.offer_status :
+        g === "commercial" ? u.commercial_status :
+        g === "contract" ? u.contract_status :
+        u.final_status;
+
+      sel.value = val || "";
+      sel.disabled = true;
+      applyStatusColor(sel);
+
+      // ✅ status o'zgarsa: faqat shu qatorni upsert qilamiz
+      sel.addEventListener("change", async ()=>{
+        try{
+          const item = buildItemFromRow(tr);
+          await apiUpsertOne(item);
+          applyStatusColor(sel);
+        }catch(err){
+          console.log(err);
+          alert("Saqlashda xatolik (upsert). RLS policy/permissions ni tekshiring.");
+        }
+      });
+    });
+  });
+}
+
+/* =========================
+   LOCK / EDIT SAVE
+========================= */
+function lockRow(tr, lock=true){
+  tr.querySelectorAll("input, select").forEach(el=>{
+    el.disabled = lock;
+  });
+}
+
+async function toggleEdit(btn){
+  const tr = btn.closest("tr");
+  const editing = btn.dataset.edit === "1";
+
+  // edit rejimidan chiqayotgan bo'lsa — saqlaymiz
+  if(editing){
+    try{
+      const item = buildItemFromRow(tr);
+      await apiUpsertOne(item);
+    }catch(err){
+      console.log(err);
+      alert("Saqlashda xatolik (edit). RLS policy/permissions ni tekshiring.");
+      return; // xato bo'lsa editdan chiqarmaymiz
+    }
+  }
+
+  lockRow(tr, editing);
+  btn.dataset.edit = editing ? "0" : "1";
+  btn.textContent = editing ? "✏️ Tahrirlash" : "💾 Saqlash";
+}
+
+/* =========================
+   ADD / DELETE + MODAL
+========================= */
+function openAdd(){
+  document.getElementById("addModal").style.display = "flex";
+}
+function openDelete(){
+  document.getElementById("deleteModal").style.display = "flex";
+}
+
+document.getElementById("addModal")?.addEventListener("click", (e)=>{
+  if(e.target.id === "addModal") e.target.style.display="none";
+});
+document.getElementById("deleteModal")?.addEventListener("click", (e)=>{
+  if(e.target.id === "deleteModal") e.target.style.display="none";
+});
+
+async function addUniver(){
+  const nameEl = document.getElementById("addName");
+  const workEl = document.getElementById("addWork");
+  const university = (nameEl?.value || "").trim();
+  const work_started = (workEl?.value || "").trim();
+
+  if(!university) return alert("Universitet nomini kiriting");
+
+  // dublikatni tekshirish
+  const list = await apiList();
+  if(list.some(x => ((x.university||x.name||"").toLowerCase() === university.toLowerCase()))){
+    alert("Bu universitet allaqachon mavjud!");
+    return;
+  }
+
+  try{
+    await apiUpsertOne({
+      university,
+      work_started,
+      meeting_date:"",
+      comment:"",
+      offer_status:"",
+      commercial_status:"",
+      contract_status:"",
+      final_status:""
+    });
+
+    await loadFromLocal();
+
+    document.getElementById("addModal").style.display="none";
+    if(nameEl) nameEl.value="";
+    if(workEl) workEl.value="";
+  }catch(err){
+    console.log(err);
+    alert("Qo‘shishda xatolik (upsert).");
+  }
+}
+
+async function deleteUniver(){
+  const nameEl = document.getElementById("deleteName");
+  const university = (nameEl?.value || "").trim();
+  if(!university) return alert("Universitet nomini kiriting");
+
+  try{
+    await apiDeleteByName(university);
+    await loadFromLocal();
+
+    document.getElementById("deleteModal").style.display="none";
+    if(nameEl) nameEl.value="";
+  }catch(err){
+    console.log(err);
+    alert("O‘chirishda xatolik (delete).");
+  }
+}
+
+/* =========================
+   FILTER
+========================= */
+function filterTable(){
+  const q = (document.getElementById("filterInput")?.value || "").toLowerCase().trim();
+  tbody.querySelectorAll("tr").forEach(tr=>{
+    const name = tr.querySelector(".univer")?.textContent.toLowerCase() || "";
+    tr.style.display = name.includes(q) ? "" : "none";
+  });
+}
+
+/* =========================
+   START
+========================= */
+window.onload = loadFromLocal;
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
