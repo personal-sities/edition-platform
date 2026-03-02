@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<title>Klinikalar monitoringi</title>
+
+<style>
+:root{
+    --blue:#1f5fa8;
+    --bg:#f4f7fb;
+    --border:#1f5fa8;
+}
+*{box-sizing:border-box;font-family:Arial,sans-serif}
+body{margin:0;background:var(--bg)}
+
+.header{
+    background:var(--blue);
+    color:#fff;
+    padding:15px 25px;
+    display:flex;
+    align-items:center;
+    gap:15px;
+}
+.logo{height:45px}
+.header h1{margin:0;font-size:22px}
+
+.container{padding:25px}
+
+.filter{
+    display:flex;
+    gap:10px;
+    margin-bottom:15px;
+}
+.filter input{padding:8px;width:250px}
+
+.btn{
+    background:var(--blue);
+    color:#fff;
+    border:none;
+    padding:8px 14px;
+    border-radius:6px;
+    cursor:pointer;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    background:#fff;
+}
+th,td{
+    border:2px solid var(--border);
+    padding:8px;
+    text-align:center;
+}
+th{color:var(--blue);background:#f9fbff}
+
+.clinic{
+    font-weight:bold;
+    color:var(--blue);
+    text-align:left;
+}
+
+.status-box{
+    text-align:left;
+    font-size:13px;
+}
+.status-box label{display:block;cursor:pointer}
+
+.comment{
+    width:100%;
+    border:none;
+    outline:none;
+}
+
+.footer{
+    margin-top:15px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.modal{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.4);
+    display:none;
+    align-items:center;
+    justify-content:center;
+}
+.modal-box{
+    background:#fff;
+    padding:20px;
+    width:350px;
+    border-radius:10px;
+}
+.modal-box h3{margin-top:0}
+.modal-box input{
+    width:100%;
+    padding:8px;
+    margin-bottom:10px;
+}
+.modal-actions{
+    display:flex;
+    gap:10px;
+    justify-content:flex-end;
+}
+.status-green{background:#e6f7e6;border-left:4px solid #28a745;padding-left:4px}
+.status-red{background:#fdeaea;border-left:4px solid #dc3545;padding-left:4px}
+.status-yellow{background:#fff8e1;border-left:4px solid #ffc107;padding-left:4px}
+</style>
+</head>
+<body>
+
+<div class="header">
+    <img src="images/studentcall.png" class="logo">
+    <h1>Klinikalar monitoringi</h1>
+</div>
+
+<div class="container">
+
+    <div class="filter">
+        <input id="filterInput" placeholder="Klinika nomi bo‘yicha filtr">
+        <button class="btn" onclick="filterTable()">Filtr</button>
+    </div>
+
+    <table>
+        <thead>
+        <tr>
+            <th>🏥Klinika nomi</th>
+            <th>📩Taklif</th>
+            <th>🤝Suhbat sanasi</th>
+            <th>💵Коммерческий предложение</th>
+            <th>📝Shartnoma</th>
+            <th>👨‍💻Ish boshlandi</th>
+            <th>🏁Yakun</th>
+            <th>💬Koment</th>
+            <th>🖋Tahrirlash</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div class="footer">
+        <button class="btn" onclick="history.back()">← Orqaga</button>
+        <div>
+            <button class="btn" onclick="openDelete()">Klinikani o‘chirish −</button>
+            <button class="btn" onclick="openAdd()">Klinika qo‘shish +</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="addModal">
+    <div class="modal-box">
+        <h3>Klinika qo‘shish</h3>
+        <input id="addName" placeholder="Klinika nomi">
+        <input id="addWork" placeholder="Ish boshlandi">
+        <div class="modal-actions">
+            <button class="btn" onclick="addClinic()">Qo‘shish</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="deleteModal">
+    <div class="modal-box">
+        <h3>Klinika o‘chirish</h3>
+        <input id="deleteName" placeholder="Klinika nomi">
+        <div class="modal-actions">
+            <button class="btn" onclick="deleteClinic()">O‘chirish</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwBA5N_8ruGcsj_qHoC5-lHJw14CgA1KsoNjDMdEpsqAlsdTAaeb0bC8qkFJLKAFC-a8A/exec";
+const tbody = document.querySelector("tbody");
+
+/* =========================
+   API (Google Sheets)
+========================= */
+async function apiList(){
+  const res = await fetch(`${SCRIPT_URL}?action=list`, { cache:"no-store" });
+  const j = await res.json();
+  if(!j.ok) throw new Error(j.error || "API list error");
+  return j.data || [];
+}
+
+async function apiSaveAll(list){
+  const res = await fetch(SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ action:"saveAll", data:list })
+  });
+  const j = await res.json();
+  if(!j.ok) throw new Error(j.error || "API saveAll error");
+}
+
+async function getData(){ return await apiList(); }
+async function setData(list){ await apiSaveAll(list); }
+
+/* =========================
+   STATUS OPTIONS + COLORS
+========================= */
+const STATUS = {
+  offer: [
+    { v:"", t:"— tanlang —", c:"" },
+    { v:"Berildi", t:"Berildi", c:"status-green" },
+    { v:"O'ylab ko'rmoqda", t:"O'ylab ko'rmoqda", c:"status-yellow" },
+    { v:"Rad etdi", t:"Rad etdi", c:"status-red" },
+    { v:"Rozi bo'ldi", t:"Rozi bo'ldi", c:"status-green" },
+  ],
+  commercial: [
+    { v:"", t:"— tanlang —", c:"" },
+    { v:"Berildi", t:"Berildi", c:"status-green" },
+    { v:"O'ylab ko'rmoqda", t:"O'ylab ko'rmoqda", c:"status-yellow" },
+    { v:"Rad etildi", t:"Rad etildi", c:"status-red" },
+  ],
+  contract: [
+    { v:"", t:"— tanlang —", c:"" },
+    { v:"Tuzildi", t:"Tuzildi", c:"status-green" },
+    { v:"Tuzilmadi", t:"Tuzilmadi", c:"status-red" },
+    { v:"O'ylab ko'rmoqda", t:"O'ylab ko'rmoqda", c:"status-yellow" },
+  ],
+  final: [
+    { v:"", t:"— tanlang —", c:"" },
+    { v:"Yakunlandi", t:"Yakunlandi", c:"status-green" },
+    { v:"Yakunlanmadi", t:"Yakunlanmadi", c:"status-red" },
+    { v:"Jarayonda", t:"Jarayonda", c:"status-yellow" },
+  ]
+};
+
+function statusClass(groupKey, value){
+  const item = STATUS[groupKey].find(x => x.v === value);
+  return item ? item.c : "";
+}
+
+function statusSelectHTML(groupKey, value, clinicName){
+  const opts = STATUS[groupKey].map(o =>
+    `<option value="${String(o.v).replace(/"/g,'&quot;')}">${o.t}</option>`
+  ).join("");
+
+  return `
+    <div class="status-wrap ${statusClass(groupKey, value)}">
+      <select class="status-select"
+              data-group="${groupKey}"
+              data-clinic="${encodeURIComponent(clinicName)}">
+        ${opts}
+      </select>
+    </div>
+  `;
+}
+
+function applyStatusColor(sel){
+  const wrap = sel.closest(".status-wrap");
+  if(!wrap) return;
+  wrap.classList.remove("status-green","status-red","status-yellow");
+  const cls = statusClass(sel.dataset.group, sel.value);
+  if(cls) wrap.classList.add(cls);
+}
+
+/* =========================
+   HELPERS (row -> item)
+   Eslatma: Sheet ustuni "university" bo‘lsa ham shu joyga yozamiz.
+========================= */
+function buildItemFromRow(tr){
+  const clinic = tr.querySelector(".clinic-name")?.textContent.trim() || "";
+
+  const dateVal = tr.querySelector('input[type="date"]')?.value || "";
+  const commentVal = tr.querySelector(".comment")?.value || "";
+
+  const offerSel = tr.querySelector('select[data-group="offer"]');
+  const commSel  = tr.querySelector('select[data-group="commercial"]');
+  const contSel  = tr.querySelector('select[data-group="contract"]');
+  const finalSel = tr.querySelector('select[data-group="final"]');
+
+  return {
+    university: clinic, // ✅ backendga mos
+    work_started: tr.children[5]?.textContent.trim() || "",
+    meeting_date: dateVal,
+    comment: commentVal,
+    offer_status: offerSel?.value || "",
+    commercial_status: commSel?.value || "",
+    contract_status: contSel?.value || "",
+    final_status: finalSel?.value || "",
+  };
+}
+
+/* =========================
+   RENDER / LOAD
+========================= */
+async function loadFromSheet(){
+  let clinics = [];
+  try{
+    clinics = await getData();
+  }catch(err){
+    console.log(err);
+    alert("Ma'lumotni yuklashda xatolik. Apps Script Deploy (Anyone) ekanini tekshiring!");
+    clinics = [];
+  }
+
+  tbody.innerHTML = "";
+
+  clinics.forEach(c=>{
+    const clinicName = (c.university || c.clinic || c.name || "").trim();
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="clinic clinic-name">${clinicName}</td>
+
+      <td class="status-box">
+        ${statusSelectHTML("offer", c.offer_status || "", clinicName)}
+      </td>
+
+      <td><input type="date" value="${c.meeting_date || ""}" disabled></td>
+
+      <td class="status-box">
+        ${statusSelectHTML("commercial", c.commercial_status || "", clinicName)}
+      </td>
+
+      <td class="status-box">
+        ${statusSelectHTML("contract", c.contract_status || "", clinicName)}
+      </td>
+
+      <td>${c.work_started || ""}</td>
+
+      <td class="status-box">
+        ${statusSelectHTML("final", c.final_status || "", clinicName)}
+      </td>
+
+      <td><input class="comment" value="${c.comment || ""}" placeholder="Koment..." disabled></td>
+
+      <td>
+        <button class="btn" data-edit="0" onclick="toggleEdit(this)">✏️ Tahrirlash</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+
+    // selectlarni set qilish + disable
+    tr.querySelectorAll("select.status-select").forEach(sel=>{
+      const g = sel.dataset.group;
+
+      const val =
+        g === "offer" ? (c.offer_status||"") :
+        g === "commercial" ? (c.commercial_status||"") :
+        g === "contract" ? (c.contract_status||"") :
+        (c.final_status||"");
+
+      sel.value = val || "";
+      sel.disabled = true;
+      applyStatusColor(sel);
+
+      // status o'zgarsa -> saveAll orqali saqlaydi
+      sel.addEventListener("change", async ()=>{
+        try{
+          const name = decodeURIComponent(sel.dataset.clinic || "");
+          const list = await getData();
+          const idx = list.findIndex(x => ((x.university||x.clinic||x.name||"").trim() === name));
+          if(idx === -1) return;
+
+          if(g === "offer") list[idx].offer_status = sel.value;
+          if(g === "commercial") list[idx].commercial_status = sel.value;
+          if(g === "contract") list[idx].contract_status = sel.value;
+          if(g === "final") list[idx].final_status = sel.value;
+
+          await setData(list);
+          applyStatusColor(sel);
+        }catch(err){
+          console.log(err);
+          alert("Saqlashda xatolik (saveAll). Deploy/permissions ni tekshiring.");
+        }
+      });
+    });
+  });
+}
+
+/* =========================
+   LOCK / EDIT SAVE
+========================= */
+function lockRow(tr, lock=true){
+  tr.querySelectorAll("input, select").forEach(el=> el.disabled = lock);
+}
+
+async function toggleEdit(btn){
+  const tr = btn.closest("tr");
+  const editing = btn.dataset.edit === "1";
+
+  if(editing){
+    try{
+      const item = buildItemFromRow(tr);
+
+      // saveAll ishlatayotganimiz uchun listni topib update qilamiz
+      const list = await getData();
+      const idx = list.findIndex(x => ((x.university||x.clinic||x.name||"").trim() === item.university));
+      if(idx !== -1){
+        list[idx].meeting_date = item.meeting_date;
+        list[idx].comment = item.comment;
+        // work_started UI dan td ichida - xohlasangiz shu yerda ham update qildiramiz
+        list[idx].work_started = item.work_started;
+        await setData(list);
+      }
+    }catch(err){
+      console.log(err);
+      alert("Saqlashda xatolik (edit/saveAll).");
+      return;
+    }
+  }
+
+  lockRow(tr, editing);
+  btn.dataset.edit = editing ? "0" : "1";
+  btn.textContent = editing ? "✏️ Tahrirlash" : "💾 Saqlash";
+}
+
+/* =========================
+   ADD / DELETE + MODAL
+   ✅ HTML onclick: addClinic(), deleteClinic()
+========================= */
+function openAdd(){ document.getElementById("addModal").style.display = "flex"; }
+function openDelete(){ document.getElementById("deleteModal").style.display = "flex"; }
+
+document.getElementById("addModal")?.addEventListener("click", (e)=>{
+  if(e.target.id === "addModal") e.target.style.display="none";
+});
+document.getElementById("deleteModal")?.addEventListener("click", (e)=>{
+  if(e.target.id === "deleteModal") e.target.style.display="none";
+});
+
+async function addClinic(){
+  const nameEl = document.getElementById("addName");
+  const workEl = document.getElementById("addWork");
+  const clinic = (nameEl?.value || "").trim();
+  const work_started = (workEl?.value || "").trim();
+
+  if(!clinic) return alert("Klinika nomini kiriting");
+
+  const list = await getData();
+  if(list.some(x => ((x.university||x.clinic||x.name||"").toLowerCase() === clinic.toLowerCase()))){
+    alert("Bu klinika allaqachon mavjud!");
+    return;
+  }
+
+  list.push({
+    university: clinic, // ✅ backend ustuni
+    work_started,
+    meeting_date:"",
+    comment:"",
+    offer_status:"",
+    commercial_status:"",
+    contract_status:"",
+    final_status:""
+  });
+
+  await setData(list);
+  await loadFromSheet();
+
+  document.getElementById("addModal").style.display="none";
+  if(nameEl) nameEl.value="";
+  if(workEl) workEl.value="";
+}
+
+async function deleteClinic(){
+  const nameEl = document.getElementById("deleteName");
+  const clinic = (nameEl?.value || "").trim();
+  if(!clinic) return alert("Klinika nomini kiriting");
+
+  let list = await getData();
+  list = list.filter(x => ((x.university||x.clinic||x.name||"").toLowerCase() !== clinic.toLowerCase()));
+
+  await setData(list);
+  await loadFromSheet();
+
+  document.getElementById("deleteModal").style.display="none";
+  if(nameEl) nameEl.value="";
+}
+
+/* =========================
+   FILTER
+========================= */
+function filterTable(){
+  const q = (document.getElementById("filterInput")?.value || "").toLowerCase().trim();
+  tbody.querySelectorAll("tr").forEach(tr=>{
+    const name = tr.querySelector(".clinic-name")?.textContent.toLowerCase() || "";
+    tr.style.display = name.includes(q) ? "" : "none";
+  });
+}
+
+/* =========================
+   START
+========================= */
+window.onload = loadFromSheet;
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
