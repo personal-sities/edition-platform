@@ -1,7 +1,7 @@
 // ====== SUPABASE CONFIG ======
 // Supabase Project Settings -> API dan oling va shu yerga qo'ying:
-const SUPABASE_URL = "https://YOUR_PROJECT.supabase.co";
-const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
+const SUPABASE_URL = "https://yvbvkzmcxqkkmukykxmj.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_Tzf9bUaWID0B_925ss5yUg_KO9NKGfM";
 
 // HTML sahifalarda auth.js dan OLDIN supabase-js CDN ulangan bo'lishi kerak.
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
