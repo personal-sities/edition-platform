@@ -291,15 +291,13 @@ async function addTask(i){
   const status = computeStatus((date || "").trim());
 
   try{
-    await apiUpsertTask({
-      task_id: "",                 // bo'sh yuborsak backend yangi id beradi
-      staff_id: person.staff_id,   // ✅ qaysi hodimga tegishli
-      name: name.trim(),
-      place: (place || "").trim(),
-      date: (date || "").trim(),
-      status: status
-    });
-
+  await apiUpsertTask(person.staff_id, {
+  id: "", // task_id o'rniga
+  name: name.trim(),
+  place: (place || "").trim(),
+  date: (date || "").trim(),
+  status: status
+});
     await loadFromSheet();
   }catch(err){
     console.log(err);
@@ -322,7 +320,15 @@ async function done(i, taskIdEnc){
     alert("Bajarildi qilishda xatolik: " + (err.message || err));
   }
 }
-
+async function loadFromSheet(){
+  try{
+    staff = await apiList();
+    render();
+  }catch(err){
+    console.log(err);
+    alert("Ma'lumotlarni yuklashda xatolik: " + (err.message || err));
+  }
+}
 /* =========================
    XSSdan himoya (matn)
 ========================= */
