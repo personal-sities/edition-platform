@@ -80,26 +80,29 @@ body{
 <body>
 
 <div class="header">
-<img src="images/studentcall.png" class="logo" alt="logo">
-<div class="title">Hodimlar nazorati</div>
+  <img src="images/studentcall.png" class="logo" alt="logo">
+  <div class="title">Hodimlar nazorati</div>
 </div>
 
 <div class="container" id="staffContainer"></div>
 
 <div class="bottom">
-<button class="btn red" onclick="history.back()">Orqaga</button>
-<button class="btn green" onclick="addStaff()">Hodim qo'shish +</button>
+  <button class="btn red" onclick="history.back()">Orqaga</button>
+  <button class="btn green" onclick="addStaff()">Hodim qo'shish +</button>
 </div>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/auth.js"></script>
-  <script>requireAuth();</script>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/auth.js"></script>
+<script>requireAuth();</script>
 
-<script>/* =========================
-   SUPABASE API
-   (staff + tasks)
+<script>
+/* =========================
+   SUPABASE API (staff + tasks)
 ========================= */
 const db = window.supabaseClient;
+if (!db) {
+  alert("Supabase client topilmadi. js/auth.js ichida window.supabaseClient yaratilganini tekshiring.");
+}
 
 let staff = []; // UI uchun
 
@@ -111,33 +114,39 @@ async function apiList(){
 
   if(error) throw new Error(error.message || "Supabase list error");
 
-  const today = new Date().toISOString().split("T")[0];
+  const todayISO = new Date().toISOString().split("T")[0];
+
   const out = (data || []).map(s => ({
     staff_id: s.staff_id || "",
     name: s.name || "",
     role: s.role || "",
     place: s.place || "",
-    tasks: (s.tasks || []).map(t => ({
-      id: t.task_id || "",
-      name: t.name || "",
-      place: t.place || "",
-      date: t.date || "",
-      // Agar muddat o'tgan bo'lsa va status hali aktiv (0) bo'lsa,
-      // UI'da "muddati o'tgan" (2) sifatida ko'rsatamiz.
-      status: (t.date && String(t.date) < today && Number(t.status ?? 0) === 0) ? 2 : Number(t.status ?? 0)
-    }))
+    tasks: (s.tasks || []).map(t => {
+      const iso = t.date ? String(t.date) : "";
+      const rawStatus = Number(t.status ?? 0);
+      const status = (iso && iso < todayISO && rawStatus === 0) ? 2 : rawStatus;
+
+      return {
+        id: t.task_id || "",
+        name: t.name || "",
+        place: t.place || "",
+        date: iso,       // DB'dan ISO keladi
+        status: status
+      };
+    })
   }));
 
-  // Ixtiyoriy: DB'da ham muddat o'tganlarni 2 qilib qo'yamiz (keyingi yuklashda ham to'g'ri turadi)
+  // Ixtiyoriy: DB'da ham muddat o'tganlarni status=2 qilib qo'yamiz
   try{
     const overdueIds = [];
     (data || []).forEach(s => (s.tasks || []).forEach(t => {
-      if(t.date && String(t.date) < today && Number(t.status ?? 0) === 0) overdueIds.push(Number(t.task_id));
+      const iso = t.date ? String(t.date) : "";
+      if(iso && iso < todayISO && Number(t.status ?? 0) === 0) overdueIds.push(Number(t.task_id));
     }));
     if(overdueIds.length){
-      await db.from('tasks').update({ status: 2 }).in('task_id', overdueIds);
+      await db.from("tasks").update({ status: 2 }).in("task_id", overdueIds);
     }
-  }catch(e){ /* jim o'tkazamiz */ }
+  }catch(e){ /* jim */ }
 
   return out;
 }
@@ -166,7 +175,7 @@ async function apiUpsertTask(staffId, taskObj){
     staff_id: Number(staffId),
     name: taskObj.name || "",
     place: taskObj.place || "",
-    date: taskObj.date || null,
+    date: taskObj.date || null, // ISO: YYYY-MM-DD
     status: Number(taskObj.status ?? 0)
   };
 
@@ -189,17 +198,81 @@ async function apiMarkDone(taskId){
 }
 
 /* =========================
+   Sana utils
+   - Kiritish: dd-mm-yyyy / 02032026 / 2026-03-02 / 02.03.2026
+   - DB'ga: YYYY-MM-DD
+   - UI'ga: DD-MM-YYYY
+========================= */
+function normalizeDateInput(input){
+  const s = String(input || "").trim();
+  if(!s) return { iso: null, display: "" };
+
+  // 02032026
+  if(/^\d{8}$/.test(s)){
+    const dd = s.slice(0,2);
+    const mm = s.slice(2,4);
+    const yyyy = s.slice(4,8);
+    return validateAndBuild(dd, mm, yyyy);
+  }
+
+  // 02-03-2026, 02.03.2026, 02/03/2026, 2 3 2026
+  const parts = s.split(/[-./\s]/).filter(Boolean);
+  if(parts.length === 3){
+    let [p1, p2, p3] = parts;
+    const dd = String(p1).padStart(2, "0");
+    const mm = String(p2).padStart(2, "0");
+    const yyyy = String(p3).length === 2 ? ("20" + p3) : String(p3);
+    return validateAndBuild(dd, mm, yyyy);
+  }
+
+  // 2026-03-02
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)){
+    const [yyyy, mm, dd] = s.split("-");
+    return validateAndBuild(dd, mm, yyyy);
+  }
+
+  throw new Error("Sana noto‘g‘ri. Masalan: 02-03-2026 yoki 02032026");
+}
+
+function validateAndBuild(dd, mm, yyyy){
+  if(!/^\d{2}$/.test(dd) || !/^\d{2}$/.test(mm) || !/^\d{4}$/.test(yyyy)){
+    throw new Error("Sana noto‘g‘ri. Masalan: 02-03-2026 yoki 02032026");
+  }
+  const d = Number(dd), m = Number(mm), y = Number(yyyy);
+  if(y < 2000 || y > 2100) throw new Error("Yil noto‘g‘ri");
+  if(m < 1 || m > 12) throw new Error("Oy noto‘g‘ri");
+  if(d < 1 || d > 31) throw new Error("Kun noto‘g‘ri");
+
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if(dt.getUTCFullYear() !== y || (dt.getUTCMonth()+1) !== m || dt.getUTCDate() !== d){
+    throw new Error("Sana mavjud emas");
+  }
+
+  const display = `${String(d).padStart(2,"0")}-${String(m).padStart(2,"0")}-${y}`;
+  const iso = `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+  return { iso, display };
+}
+
+function formatISOToDisplay(iso){
+  if(!iso) return "";
+  if(/^\d{4}-\d{2}-\d{2}$/.test(iso)){
+    const [y,m,d] = iso.split("-");
+    return `${d}-${m}-${y}`;
+  }
+  return iso;
+}
+
+/* =========================
    TASK statusini hisoblash
 ========================= */
-function computeStatus(dateStr){
-  const now = new Date().toISOString().split("T")[0];
-  if(dateStr && dateStr < now) return 2; // muddati o'tgan
+function computeStatus(isoDateStr){
+  const nowISO = new Date().toISOString().split("T")[0];
+  if(isoDateStr && isoDateStr < nowISO) return 2; // muddati o'tgan
   return 0; // aktiv
 }
 
 /* =========================
-   RENDER HTML
-   (strukturani o'zgartirmadik)
+   RENDER
 ========================= */
 function render(){
   const staffContainer = document.getElementById("staffContainer");
@@ -227,31 +300,28 @@ function render(){
   });
 }
 
-/* =========================
-   TASKS HTML generatsiyasi
-========================= */
 function tasksHTML(tasks, status, index){
   return (tasks || [])
     .filter(t => Number(t.status) === Number(status))
     .map(t => `
       <p>
-        ${escapeHtml(t.name)} | ${escapeHtml(t.place || "")} | ${escapeHtml(t.date || "")}
-        ${(Number(status) === 0 || Number(status) === 2) ? `<button onclick="done(${index},'${encodeURIComponent(t.id)}')">Bajarildi</button>` : ""}
+        ${escapeHtml(t.name)} | ${escapeHtml(t.place || "")} | ${escapeHtml(formatISOToDisplay(t.date || ""))}
+        ${(Number(status) === 0 || Number(status) === 2)
+          ? `<button onclick="done(${index},'${encodeURIComponent(t.id)}')">Bajarildi</button>`
+          : ""
+        }
       </p>
     `)
     .join("");
 }
 
-/* =========================
-   SECTION toggle funksiyasi
-========================= */
 function toggle(btn, i){
   const sec = btn.parentElement.querySelectorAll(".section")[i];
   sec.style.display = sec.style.display === "block" ? "none" : "block";
 }
 
 /* =========================
-   Yangi hodim qo'shish (SHEET)
+   Actions
 ========================= */
 async function addStaff(){
   const name = prompt("Ism familiya:");
@@ -261,12 +331,11 @@ async function addStaff(){
 
   try{
     await apiUpsertStaff({
-      staff_id: "",             // bo'sh yuborsak backend yangi id beradi
+      staff_id: "",
       name: name.trim(),
       role: (role || "").trim(),
       place: (place || "").trim()
     });
-
     await loadFromSheet();
   }catch(err){
     console.log(err);
@@ -274,30 +343,35 @@ async function addStaff(){
   }
 }
 
-/* =========================
-   Yangi vazifa qo'shish (SHEET)
-========================= */
 async function addTask(i){
   const person = staff[i];
   if(!person || !person.staff_id){
-    return alert("Hodim ID topilmadi. Avval hodimni qayta yuklang.");
+    return alert("Hodim ID topilmadi. Avval sahifani yangilang.");
   }
 
   const name = prompt("Vazifa nomi:");
-  const date = prompt("Muddat YYYY-MM-DD:");
+  const dateRaw = prompt("Muddat (dd-mm-yyyy yoki 02032026):");
   const place = prompt("Bajariladigan joyi:");
   if(!name) return;
 
-  const status = computeStatus((date || "").trim());
+  let dateISO = null;
+  try{
+    const parsed = normalizeDateInput(dateRaw || "");
+    dateISO = parsed.iso; // ✅ DB uchun ISO
+  }catch(e){
+    return alert(e.message || "Sana formati noto‘g‘ri");
+  }
+
+  const status = computeStatus(dateISO);
 
   try{
-  await apiUpsertTask(person.staff_id, {
-  id: "", // task_id o'rniga
-  name: name.trim(),
-  place: (place || "").trim(),
-  date: (date || "").trim(),
-  status: status
-});
+    await apiUpsertTask(person.staff_id, {
+      id: "",
+      name: name.trim(),
+      place: (place || "").trim(),
+      date: dateISO,
+      status: status
+    });
     await loadFromSheet();
   }catch(err){
     console.log(err);
@@ -305,9 +379,6 @@ async function addTask(i){
   }
 }
 
-/* =========================
-   Vazifani bajarildi qilish (SHEET)
-========================= */
 async function done(i, taskIdEnc){
   const taskId = decodeURIComponent(taskIdEnc || "");
   if(!taskId) return;
@@ -320,6 +391,10 @@ async function done(i, taskIdEnc){
     alert("Bajarildi qilishda xatolik: " + (err.message || err));
   }
 }
+
+/* =========================
+   Load & helpers
+========================= */
 async function loadFromSheet(){
   try{
     staff = await apiList();
@@ -329,9 +404,7 @@ async function loadFromSheet(){
     alert("Ma'lumotlarni yuklashda xatolik: " + (err.message || err));
   }
 }
-/* =========================
-   XSSdan himoya (matn)
-========================= */
+
 function escapeHtml(str){
   return String(str)
     .replaceAll("&","&amp;")
@@ -341,19 +414,7 @@ function escapeHtml(str){
     .replaceAll("'","&#039;");
 }
 
-/* =========================
-   START
-========================= */
 window.onload = loadFromSheet;
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
