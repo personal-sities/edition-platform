@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+<title>Hodimlar nazorati</title>
+
+<style>
+body{
+    margin:0;
+    font-family:Segoe UI;
+    background:#f3f5f7;
+}
+.header{
+    background:#2b5f98;
+    color:#fff;
+    padding:20px 40px;
+    display:flex;
+    align-items:center;
+}
+.logo{
+    width:55px;
+    height:55px;
+    margin-right:15px;
+}
+.title{
+    font-size:28px;
+    font-weight:bold;
+}
+.container{
+    width:85%;
+    margin:40px auto;
+}
+.card{
+    border:3px solid #2b5f98;
+    border-radius:15px;
+    padding:25px;
+    margin-bottom:25px;
+    background:white;
+    position:relative;
+}
+.name{font-size:24px;font-weight:bold;color:#2b5f98;}
+.btn{
+    background:#2b5f98;
+    color:white;
+    border:none;
+    padding:10px 20px;
+    border-radius:10px;
+    margin-top:15px;
+    margin-right:10px;
+    cursor:pointer;
+}
+.plus{
+    position:absolute;
+    right:25px;
+    top:50%;
+    transform:translateY(-50%);
+    width:50px;
+    height:50px;
+    border-radius:50%;
+    font-size:22px;
+}
+.section{
+    display:none;
+    margin-top:20px;
+    border-top:1px solid #ddd;
+    padding-top:10px;
+}
+.bottom{
+    width:85%;
+    margin:30px auto;
+    display:flex;
+    justify-content:space-between;
+}
+.green{background:#28a745;}
+.red{background:#dc3545;}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+  <img src="images/studentcall.png" class="logo" alt="logo">
+  <div class="title">Hodimlar nazorati</div>
+</div>
+
+<div class="container" id="staffContainer"></div>
+
+<div class="bottom">
+  <button class="btn red" onclick="history.back()">Orqaga</button>
+  <button class="btn green" onclick="addStaff()">Hodim qo'shish +</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/auth.js"></script>
+<script>requireAuth();</script>
+
+<script>
+/* =========================
+   SUPABASE API (staff + tasks)
+========================= */
+const db = window.supabaseClient;
+if (!db) {
+  alert("Supabase client topilmadi. js/auth.js ichida window.supabaseClient yaratilganini tekshiring.");
+}
+
+let staff = []; // UI uchun
+
+// Telegram xabarnoma (tokenni brauzerga yozmang — Supabase Edge Function orqali yuboramiz)
+const ADMIN_CHAT_IDS = ["2031871840","5904595711"]; // adminlar
+
+async function notifyNewTask(person, task){
+  // Supabase Edge Function: notify_task_assigned
+  // Keyin supabase/functions/notify_task_assigned ni qo'shamiz.
+  try{
+    if(!db?.functions?.invoke) return;
+    const body = {
+      to_chat_id: String(person?.telegram_chat_id || ""),
+      admins: ADMIN_CHAT_IDS,
+      staff_id: Number(person?.staff_id || 0),
+      staff_name: String(person?.name || ""),
+      task_name: String(task?.name || ""),
+      task_place: String(task?.place || ""),
+      task_date: String(task?.date || "")
+    };
+
+    const { error } = await db.functions.invoke("notify_task_assigned", { body });
+    if(error) throw error;
+  }catch(e){
+    console.log("Telegram notify skipped:", e?.message || e);
+  }
+}
+
+
+async function apiList(){
+  const { data, error } = await db
+    .from("staff")
+    .select("staff_id,name,role,place,telegram_chat_id,tasks(task_id,name,place,date,status)")
+    .order("staff_id", { ascending: true });
+
+  if(error) throw new Error(error.message || "Supabase list error");
+
+  const todayISO = new Date().toISOString().split("T")[0];
+
+  const out = (data || []).map(s => ({
+    staff_id: s.staff_id || "",
+    name: s.name || "",
+    role: s.role || "",
+    place: s.place || "",
+    telegram_chat_id: (s.telegram_chat_id ?? "") ? String(s.telegram_chat_id) : "",
+    tasks: (s.tasks || []).map(t => {
+      const iso = t.date ? String(t.date) : "";
+      const rawStatus = Number(t.status ?? 0);
+      const status = (iso && iso < todayISO && rawStatus === 0) ? 2 : rawStatus;
+
+      return {
+        id: t.task_id || "",
+        name: t.name || "",
+        place: t.place || "",
+        date: iso,       // DB'dan ISO keladi
+        status: status
+      };
+    })
+  }));
+
+  // Ixtiyoriy: DB'da ham muddat o'tganlarni status=2 qilib qo'yamiz
+  try{
+    const overdueIds = [];
+    (data || []).forEach(s => (s.tasks || []).forEach(t => {
+      const iso = t.date ? String(t.date) : "";
+      if(iso && iso < todayISO && Number(t.status ?? 0) === 0) overdueIds.push(Number(t.task_id));
+    }));
+    if(overdueIds.length){
+      await db.from("tasks").update({ status: 2 }).in("task_id", overdueIds);
+    }
+  }catch(e){ /* jim */ }
+
+  return out;
+}
+
+async function apiUpsertStaff(staffObj){
+  const payload = {
+    staff_id: staffObj.staff_id ? Number(staffObj.staff_id) : undefined,
+    name: staffObj.name || "",
+    role: staffObj.role || "",
+    place: staffObj.place || "",
+    telegram_chat_id: (staffObj.telegram_chat_id ?? "") ? String(staffObj.telegram_chat_id).trim() : null
+  };
+
+  const { data, error } = await db
+    .from("staff")
+    .upsert(payload, { onConflict: "staff_id" })
+    .select("staff_id")
+    .single();
+
+  if(error) throw new Error(error.message || "Supabase upsert staff error");
+  return data?.staff_id;
+}
+
+async function apiUpsertTask(staffId, taskObj){
+  const payload = {
+    task_id: taskObj.id ? Number(taskObj.id) : undefined,
+    staff_id: Number(staffId),
+    name: taskObj.name || "",
+    place: taskObj.place || "",
+    date: taskObj.date || null, // ISO: YYYY-MM-DD
+    status: Number(taskObj.status ?? 0)
+  };
+
+  const { data, error } = await db
+    .from("tasks")
+    .upsert(payload, { onConflict: "task_id" })
+    .select("task_id")
+    .single();
+
+  if(error) throw new Error(error.message || "Supabase upsert task error");
+  return data?.task_id;
+}
+
+async function apiMarkDone(taskId){
+  const { error } = await db
+    .from("tasks")
+    .update({ status: 1 })
+    .eq("task_id", Number(taskId));
+  if(error) throw new Error(error.message || "Supabase mark done error");
+}
+
+/* =========================
+   Sana utils
+   - Kiritish: dd-mm-yyyy / 02032026 / 2026-03-02 / 02.03.2026
+   - DB'ga: YYYY-MM-DD
+   - UI'ga: DD-MM-YYYY
+========================= */
+function normalizeDateInput(input){
+  const s = String(input || "").trim();
+  if(!s) return { iso: null, display: "" };
+
+  // 02032026
+  if(/^\d{8}$/.test(s)){
+    const dd = s.slice(0,2);
+    const mm = s.slice(2,4);
+    const yyyy = s.slice(4,8);
+    return validateAndBuild(dd, mm, yyyy);
+  }
+
+  // 02-03-2026, 02.03.2026, 02/03/2026, 2 3 2026
+  const parts = s.split(/[-./\s]/).filter(Boolean);
+  if(parts.length === 3){
+    let [p1, p2, p3] = parts;
+    const dd = String(p1).padStart(2, "0");
+    const mm = String(p2).padStart(2, "0");
+    const yyyy = String(p3).length === 2 ? ("20" + p3) : String(p3);
+    return validateAndBuild(dd, mm, yyyy);
+  }
+
+  // 2026-03-02
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)){
+    const [yyyy, mm, dd] = s.split("-");
+    return validateAndBuild(dd, mm, yyyy);
+  }
+
+  throw new Error("Sana noto‘g‘ri. Masalan: 02-03-2026 yoki 02032026");
+}
+
+function validateAndBuild(dd, mm, yyyy){
+  if(!/^\d{2}$/.test(dd) || !/^\d{2}$/.test(mm) || !/^\d{4}$/.test(yyyy)){
+    throw new Error("Sana noto‘g‘ri. Masalan: 02-03-2026 yoki 02032026");
+  }
+  const d = Number(dd), m = Number(mm), y = Number(yyyy);
+  if(y < 2000 || y > 2100) throw new Error("Yil noto‘g‘ri");
+  if(m < 1 || m > 12) throw new Error("Oy noto‘g‘ri");
+  if(d < 1 || d > 31) throw new Error("Kun noto‘g‘ri");
+
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if(dt.getUTCFullYear() !== y || (dt.getUTCMonth()+1) !== m || dt.getUTCDate() !== d){
+    throw new Error("Sana mavjud emas");
+  }
+
+  const display = `${String(d).padStart(2,"0")}-${String(m).padStart(2,"0")}-${y}`;
+  const iso = `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+  return { iso, display };
+}
+
+function formatISOToDisplay(iso){
+  if(!iso) return "";
+  if(/^\d{4}-\d{2}-\d{2}$/.test(iso)){
+    const [y,m,d] = iso.split("-");
+    return `${d}-${m}-${y}`;
+  }
+  return iso;
+}
+
+/* =========================
+   TASK statusini hisoblash
+========================= */
+function computeStatus(isoDateStr){
+  const nowISO = new Date().toISOString().split("T")[0];
+  if(isoDateStr && isoDateStr < nowISO) return 2; // muddati o'tgan
+  return 0; // aktiv
+}
+
+/* =========================
+   RENDER
+========================= */
+function render(){
+  const staffContainer = document.getElementById("staffContainer");
+  staffContainer.innerHTML = "";
+
+  staff.forEach((s,i) => {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    card.innerHTML = `
+      <div class="name">${escapeHtml(s.name || "")}</div>
+      <div>Lavozimi: ${escapeHtml(s.role || "")}</div>
+      <div>Ish joyi: ${escapeHtml(s.place || "")}</div>
+      <div>Telegram chat ID: ${escapeHtml(s.telegram_chat_id || "")}</div>
+
+      <button class="btn" onclick="toggle(this,0)">Vazifalari</button>
+      <button class="btn" onclick="toggle(this,1)">Bajarilgan vazifalar</button>
+      <button class="btn" onclick="toggle(this,2)">Muddati o'tgan vazifalar</button>
+      <button class="btn plus" onclick="addTask(${i})">+</button>
+
+      <div class="section">${tasksHTML(s.tasks || [],0,i)}</div>
+      <div class="section">${tasksHTML(s.tasks || [],1,i)}</div>
+      <div class="section">${tasksHTML(s.tasks || [],2,i)}</div>
+    `;
+    staffContainer.appendChild(card);
+  });
+}
+
+function tasksHTML(tasks, status, index){
+  return (tasks || [])
+    .filter(t => Number(t.status) === Number(status))
+    .map(t => `
+      <p>
+        ${escapeHtml(t.name)} | ${escapeHtml(t.place || "")} | ${escapeHtml(formatISOToDisplay(t.date || ""))}
+        ${(Number(status) === 0 || Number(status) === 2)
+          ? `<button onclick="done(${index},'${encodeURIComponent(t.id)}')">Bajarildi</button>`
+          : ""
+        }
+      </p>
+    `)
+    .join("");
+}
+
+function toggle(btn, i){
+  const sec = btn.parentElement.querySelectorAll(".section")[i];
+  sec.style.display = sec.style.display === "block" ? "none" : "block";
+}
+
+/* =========================
+   Actions
+========================= */
+async function addStaff(){
+  const name = prompt("Ism familiya:");
+  const role = prompt("Lavozimi:");
+  const place = prompt("Ish joyi:");
+  const telegramChatId = prompt("Telegram chat ID (hodimniki):");
+  if(!name) return;
+
+  try{
+    await apiUpsertStaff({
+      staff_id: "",
+      name: name.trim(),
+      role: (role || "").trim(),
+      place: (place || "").trim(),
+      telegram_chat_id: (telegramChatId || "").trim()
+    });
+    await loadFromSheet();
+  }catch(err){
+    console.log(err);
+    alert("Hodim qo‘shishda xatolik: " + (err.message || err));
+  }
+}
+
+async function addTask(i){
+  const person = staff[i];
+  if(!person || !person.staff_id){
+    return alert("Hodim ID topilmadi. Avval sahifani yangilang.");
+  }
+
+  const name = prompt("Vazifa nomi:");
+  const dateRaw = prompt("Muddat (dd-mm-yyyy yoki 02032026):");
+  const place = prompt("Bajariladigan joyi:");
+  if(!name) return;
+
+  let dateISO = null;
+  try{
+    const parsed = normalizeDateInput(dateRaw || "");
+    dateISO = parsed.iso; // ✅ DB uchun ISO
+  }catch(e){
+    return alert(e.message || "Sana formati noto‘g‘ri");
+  }
+
+  const status = computeStatus(dateISO);
+
+  try{
+    const taskPayload = {
+      id: "",
+      name: name.trim(),
+      place: (place || "").trim(),
+      date: dateISO,
+      status: status
+    };
+    await apiUpsertTask(person.staff_id, taskPayload);
+
+    // Telegramga xabar (Edge Function orqali)
+    await notifyNewTask(person, taskPayload);
+
+    await loadFromSheet();
+  }catch(err){
+    console.log(err);
+    alert("Vazifa qo‘shishda xatolik: " + (err.message || err));
+  }
+}
+
+async function done(i, taskIdEnc){
+  const taskId = decodeURIComponent(taskIdEnc || "");
+  if(!taskId) return;
+
+  try{
+    await apiMarkDone(taskId);
+    await loadFromSheet();
+  }catch(err){
+    console.log(err);
+    alert("Bajarildi qilishda xatolik: " + (err.message || err));
+  }
+}
+
+/* =========================
+   Load & helpers
+========================= */
+async function loadFromSheet(){
+  try{
+    staff = await apiList();
+    render();
+  }catch(err){
+    console.log(err);
+    alert("Ma'lumotlarni yuklashda xatolik: " + (err.message || err));
+  }
+}
+
+function escapeHtml(str){
+  return String(str)
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+window.onload = loadFromSheet;
+</script>
+</body>
+</html>
