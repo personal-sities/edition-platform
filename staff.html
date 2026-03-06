@@ -369,7 +369,7 @@ async function addStaff(){
     await loadFromSheet();
   }catch(err){
     console.log(err);
-    alert("Hodim qo‘shishda xatolik: " + (err.message || err));
+    alert("Sizda adminlik huquqi yo'q: " + (err.message || err));
   }
 }
 
@@ -410,7 +410,7 @@ async function addTask(i){
     await loadFromSheet();
   }catch(err){
     console.log(err);
-    alert("Vazifa qo‘shishda xatolik: " + (err.message || err));
+    alert("Sizda adminlik huquqi yo'q: " + (err.message || err));
   }
 }
 
@@ -423,7 +423,7 @@ async function done(i, taskIdEnc){
     await loadFromSheet();
   }catch(err){
     console.log(err);
-    alert("Bajarildi qilishda xatolik: " + (err.message || err));
+    alert("Sizda adminlik huquqi yo'q: " + (err.message || err));
   }
 }
 
@@ -436,7 +436,7 @@ async function loadFromSheet(){
     render();
   }catch(err){
     console.log(err);
-    alert("Ma'lumotlarni yuklashda xatolik: " + (err.message || err));
+    alert("Sizda adminlik huquqi yo'q: " + (err.message || err));
   }
 }
 
